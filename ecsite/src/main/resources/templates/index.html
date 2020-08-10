@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8" />
+<title>ECサイト</title>
+<link href="/css/style.css" th:href="@{/css/style.css}" rel="stylesheet" />
+<script src="http://code.jquery.com/jquery-3.4.1.min.js"></script>
+<script
+	src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+<link rel="stylesheet"
+	href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css">
+<script>
+
+let cartList = [];
+$(() => {
+	$('#loginForm').on('submit', login);
+	$('.cartBtn').on('click', addCart);
+	$('#buyBtn').on('click', buy);
+    $('#historyBtn').on('click', showHistory);
+	$('#history').dialog({
+		autoOpen: false,
+	    width: 550,
+	    modal: true,
+	   buttons: [
+	    	{
+	    		text: 'OK',
+	    		click: function() {
+	    			$(this).dialog('close');
+	    		}
+	    	},
+	    ]
+	
+	});
+});
+
+let login = (event) => {
+	event.preventDefault();
+	let jsonString = {
+			'userName': $('input[name=userName]').val(),
+			'password': $('input[name=password]').val()
+	};
+	$.ajax({
+		type: 'POST',
+	    url: '/ecsite/api/login',
+	    data: JSON.stringify(jsonString),
+	    contentType: 'application/json',
+	    datatype: 'json',
+	    scriptCharset: 'utf-8'
+	})
+	.then((result) => {
+		let user = JSON.parse(result);
+		$('#welcome').text(` -- ようこそ！ ${user.fullName} さん`);
+		$('#hiddenUserId').val(user.id);
+		$('input[name=userName]').val('');
+		$('input[name=password]').val('');
+	}, () => {
+		console.error('Error: ajax connection failed.');
+	}
+	);
+};
+let addCart = (event) => {
+	let tdList = $(event.target).parent().parent().find('td');
+	let id = $(tdList[0]).text();
+	let goodsName = $(tdList[1]).text();
+	let price = $(tdList[2]).text();
+	let count = $(tdList[3]).find('input').val();
+	if (count === '0' || count === '') {
+		alert('注文数が０または空欄です。')
+		return;
+		}
+	let cart = {
+			'id': id,
+			'goodsName' : goodsName,
+			'price' : price,
+			'count' : count
+			};
+	cartList.push(cart);
+	let tbody = $('#cart').find('tbody');
+	$(tbody).children().remove();
+	cartList.forEach(function(cart, index) {
+		let tr = $('<tr />');
+		$('<td />', { 'text': cart.id }).appendTo(tr);
+		$('<td />', { 'text': cart.goodsName }).appendTo(tr);
+		$('<td />', { 'text': cart.price }).appendTo(tr);
+		$('<td />', { 'text': cart.count}).appendTo(tr);
+		let tdButton = $('<td />');
+		$('<button />', {
+			'text': 'カート削除',
+			'class': 'removeBtn',
+			
+		}).appendTo(tdButton);
+		$(tdButton).appendTo(tr);
+		$(tr).appendTo(tbody);
+	});
+$('.removeBtn').on('click', removeCart);
+};
+let buy = (event) => {
+	$.ajax({
+		type: 'POST',
+        url: '/ecsite/api/purchase',
+        data: JSON.stringify({
+        	"userId": $('#hiddenUserId').val(),
+         "cartList": cartList    
+        }),
+        contentType: 'application/json',
+        datatype: 'json',
+        scriptCharset: 'utf-8'
+	})
+	.then((result) => {
+		alert('購入しました。');
+	}, () => {
+		console.error('Error: ajax connection failed.');
+	  }
+	 );
+};
+let removeCart = (event) => {
+	const tdList = $(event.target).parent().find('td');
+	let id = $(tdList[0]).text();
+	cartList = cartList.filter(function(cart) {
+		return cart.id !== id;
+	});
+	$(event.target).parent().parent().remove();
+	};
+
+	let showHistory = () => {
+		$.ajax({
+			type: 'POST',
+	     url: '/ecsite/api/history',
+	     data: JSON.stringify({ "userId": $('#hiddenUserId').val() }),
+	     contentType: 'application/json',
+	     datatype: 'json',
+	     scriptCharset: 'utf-8'
+		})
+		.then((result) => {
+			let historyList = JSON.parse(result);
+		let tbody = $('#historyTable').find('tbody');
+		$(tbody).children().remove();
+		historyList.forEach((history, index) => {
+			let tr = $('<tr />');
+		$('<td />', { 'text': history.goodsName }).appendTo(tr);
+		$('<td />', { 'text': history.itemCount }).appendTo(tr);
+		$('<td />', { 'text': history.createdAt }).appendTo(tr);
+		$(tr).appendTo(tbody);
+		});
+		$("#history").dialog("open");
+	}, () => {
+		console.error('Error: ajax connection failed.');
+	}
+	);
+	};
+
+</script>
+</head>
+<body>
+	<header>
+		<h1>My EC Site</h1>
+		
+
+		<div>
+			<form name="loginForm" id="loginForm" method="post" action="#">
+				User name:<input type="text" name="userName" /> Password :<input
+					type="password" name="password" />
+				<button type="submit">Login</button>
+			</form>
+			<br /> <span id="welcome"> -- ようこそ！ ゲストさん</span> <input
+				type="hidden" id="hiddenUserId" value="0" />
+		</div>
+	</header>
+	<table>
+		<thead>
+			<tr>
+				<th>ID</th>
+				<th>商品名</th>
+				<th>価格</th>
+				<th>注文数</th>
+				<th>カート</th>
+			</tr>
+		</thead>
+		<tbody>
+			<tr th:each="item: ${goods}">
+				<td th:text="${item.id}" />
+				<td th:text="${item.goodsName}" />
+				<td th:text="${item.price}" />
+				<td><input type="number" class="count" value="0" /></td>
+				<td><button class="cartBtn">カートに入れる</button></td>
+			</tr>
+		</tbody>
+	</table>
+	<fieldset>
+		<legend>カート</legend>
+		<table id="cart">
+			<thead>
+				<tr>
+					<th>ID</th>
+					<th>商品名</th>
+					<th>価格</th>
+					<th>注文数</th>
+					<th>カート</th>
+				</tr>
+			</thead>
+			<tbody>
+			</tbody>
+		</table>
+		<button id="buyBtn">購入</button>
+		<button id="historyBtn">履歴</button>
+	</fieldset>
+	<div id="history" title="購入履歴" style="display: none;">
+		<table id="historyTable">
+			<thead>
+				<tr>
+					<th>商品名</th>
+					<th>注文数</th>
+					<th>購入日時</th>
+				</tr>
+			</thead>
+			<tbody>
+			</tbody>
+		</table>
+	</div>
+</body>
+</html>
